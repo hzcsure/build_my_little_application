@@ -13,6 +13,8 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(final Context context, Intent intent) {
         String action = intent.getAction();
         if (Intent.ACTION_BOOT_COMPLETED.equals(action) 
+                || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
+                || "android.intent.action.QUICKBOOT_POWERON".equals(action)
                 || Intent.ACTION_USER_PRESENT.equals(action)) {
             
             // goAsync() keeps the receiver alive for async work
