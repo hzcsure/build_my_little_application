@@ -27,9 +27,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
 
       - name: Build APK
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build-log.txt
+
+      - name: Dump build log on failure
+        if: failure()
+        run: |
+          echo "========= BUILD FAILED - FULL LOG ========="
+          cat build-log.txt
+          echo "========= GRADLE STDERR ========="
+          find . -name "*.log" -exec cat {} \; 2>/dev/null
+          find app/build -name "*.log" -exec cat {} \; 2>/dev/null
 
       - name: Sign APK
+        if: success()
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "unsigned" | head -1)
           keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA \
@@ -41,6 +51,7 @@ jobs:
             "$APK"
 
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: BootHelper
           path: app/build/outputs/apk/release/BootHelper.apk
