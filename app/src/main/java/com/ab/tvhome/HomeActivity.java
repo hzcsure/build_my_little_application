@@ -150,6 +150,48 @@ public class HomeActivity extends Activity {
         mainAdapter = new AppAdapter();
         mainGrid.setAdapter(mainAdapter);
 
+        // Key listener on GridView - fires before GridView processes the key
+        mainGrid.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                if (editMode) {
+                    if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)  { moveApp(-1); return true; }
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { moveApp(1); return true; }
+                    if (keyCode == KeyEvent.KEYCODE_BACK) { exitEditMode(); return true; }
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                        dpadDownTime = event.getDownTime();
+                        return true;
+                    }
+                    return true;
+                }
+                // DPAD_CENTER timing: DOWN records time, ACTION_UP checks duration
+                if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                        dpadDownTime = event.getDownTime();
+                        return true;
+                    }
+                    if (event.getAction() == KeyEvent.ACTION_UP) {
+                        long held = event.getEventTime() - dpadDownTime;
+                        dpadDownTime = 0;
+                        if (held >= LONG_PRESS) {
+                            toggleBottomBar();
+                        } else {
+                            int pos = mainGrid.getSelectedItemPosition();
+                            if (pos >= 0) launchApp(pos);
+                        }
+                        return true;
+                    }
+                }
+                if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
+                    if (bottomBar.getVisibility() == View.VISIBLE) {
+                        bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); return true;
+                    }
+                }
+                return false;
+            }
+        });
+
         // bottom bar
         bottomBar = new LinearLayout(this);
         bottomBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -201,59 +243,8 @@ public class HomeActivity extends Activity {
         bottomBar.addView(btn);
     }
 
-    // ============== Key events ==============
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // Edit mode: direction keys move the selected app
-        if (editMode) {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)  { moveApp(-1); return true; }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { moveApp(1); return true; }
-            if (keyCode == KeyEvent.KEYCODE_BACK) { exitEditMode(); return true; }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                dpadDownTime = System.currentTimeMillis();
-                return true;
-            }
-            return true; // block all other keys in edit mode
-        }
-
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-            dpadDownTime = System.currentTimeMillis();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-
-    @Override
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-        // Edit mode: short press OK = confirm placement
-        if (editMode) {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                long held = System.currentTimeMillis() - dpadDownTime;
-                dpadDownTime = 0;
-                if (held < LONG_PRESS) exitEditMode();
-                return true;
-            }
-            return true;
-        }
-
-        // Normal mode: short press = launch, long press = menu
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-            boolean isLong = (System.currentTimeMillis() - dpadDownTime >= LONG_PRESS);
-            dpadDownTime = 0;
-            if (isLong) toggleBottomBar();
-            else { int pos = mainGrid.getSelectedItemPosition(); if (pos >= 0) launchApp(pos); }
-            return true;
-        }
-
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (bottomBar.getVisibility() == View.VISIBLE) {
-                bottomBar.setVisibility(View.GONE);
-                mainGrid.requestFocus();
-                return true;
-            }
-        }
-        return super.onKeyUp(keyCode, event);
-    }
+    // ============== Key events ======
+    // Edit mode keys handled by mainGrid.setOnKeyListener above
 
     // ============== Edit mode ==============
     private void enterEditMode() {
