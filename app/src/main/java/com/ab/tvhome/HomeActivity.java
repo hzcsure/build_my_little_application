@@ -131,7 +131,7 @@ public class HomeActivity extends Activity {
         mainGrid.setNumColumns(COLS);
         mainGrid.setHorizontalSpacing(dp(16));
         mainGrid.setVerticalSpacing(dp(20));
-        mainGrid.setPadding(dp(40), dp(160), dp(40), dp(120));
+        mainGrid.setPadding(dp(60), dp(60), dp(60), dp(60));
         mainGrid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
         mainGrid.setColumnWidth(iconSize + tilePad * 2);
         mainGrid.setFocusable(true);
