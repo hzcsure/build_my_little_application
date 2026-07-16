@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
@@ -19,10 +19,10 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
+          ANDROID_SDK_ROOT=$ANDROID_HOME
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
       - uses: gradle/actions/setup-gradle@v3
 
@@ -35,7 +35,7 @@ jobs:
           keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA \
             -keysize 2048 -validity 10000 -storepass android -keypass android \
             -dname "CN=BootHelper, OU=Dev, O=BootHelper, L=NA, ST=NA, C=US"
-          $ANDROID_HOME/build-tools/28.0.3/apksigner sign \
+          $ANDROID_SDK_ROOT/build-tools/28.0.3/apksigner sign \
             --ks debug.keystore --ks-pass pass:android \
             --out app/build/outputs/apk/release/BootHelper.apk \
             "$APK"
