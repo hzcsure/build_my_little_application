@@ -38,19 +38,28 @@ jobs:
 
       - name: Build APK (debug)
         run: |
-          set -x
-          gradle --no-daemon --stacktrace clean 2>&1 | head -20
-          gradle --no-daemon --stacktrace --info assembleDebug 2>&1 | tail -100
-          echo "===== POST BUILD ====="
-          find . -name "*.apk" -ls
-          ls -laR app/build/ 2>/dev/null | head -30
-          echo "===== WORKSPACE FILES ====="
-          find . -type f -not -path "./.git/*" -not -path "*/build/*" 2>/dev/null | head -30
+          echo "===== AVAILABLE TASKS ====="
+          gradle --no-daemon tasks --all 2>&1 | grep -iE "assemble|debug|android" | head -30
+          echo "===== CLEAN BUILD ====="
+          gradle --no-daemon clean assembleDebug 2>&1 | tee build-log.txt
+          echo "===== FIND APK ====="
+          find . -name "*.apk" -ls 2>/dev/null
+          echo "===== ENTIRE BUILD DIR ====="
+          ls -laR app/build/ 2>/dev/null || echo "No app/build/"
+          echo "===== CURRENT DIR ====="
+          pwd && ls -la
 
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: BootHelper
           path: |
             app/build/outputs/**/*.apk
             **/*.apk
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BuildLogs
+          path: |
+            build-log.txt
