@@ -41,8 +41,10 @@ public class HomeActivity extends Activity {
     private static final String KEY_HIDDEN = "hidden_packages";
     private static final String KEY_ORDER = "app_order";
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
+    private static final String KEY_BOOT_DELAY = "boot_delay";
     private static final long BOOT_WINDOW = 120_000;
-    private static final long BOOT_DELAY = 30_000;   // wait for network init
+    private static final long[] DELAY_OPTIONS = {0, 15_000, 30_000, 60_000, 90_000};
+    private static final String[] DELAY_LABELS = {"关闭", "15秒", "30秒", "60秒", "90秒"};
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
@@ -68,6 +70,7 @@ public class HomeActivity extends Activity {
     private Map<String, Integer> sortOrder;
     private List<AppInfo> allApps, shownApps;
     private String autobootPkg;
+    private int delayIdx = 1; // default 15s
 
     private boolean editMode = false;
     private int editPos = 0;
@@ -82,14 +85,16 @@ public class HomeActivity extends Activity {
         hiddenPkgs = prefs.getStringSet(KEY_HIDDEN, new HashSet<>());
         sortOrder = loadOrder(prefs);
         autobootPkg = prefs.getString(KEY_AUTOBOOT, "");
+        delayIdx = prefs.getInt(KEY_BOOT_DELAY, 1); // default 15s
         iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
 
-        // Boot: delay 15s then launch auto-boot app (wait for network init)
-        if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty()) {
+        // Boot: delayed auto-launch (configurable)
+        if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty() && delayIdx > 0) {
             final String pkg = autobootPkg;
+            final long delay = DELAY_OPTIONS[delayIdx];
             new Handler().postDelayed(new Runnable() {
                 public void run() { launchPkg(pkg); }
-            }, BOOT_DELAY);
+            }, delay);
         }
 
         buildUI();
@@ -201,6 +206,7 @@ public class HomeActivity extends Activity {
         addBtn("移动", new Runnable() { public void run() { enterEditMode(); } });
         addBtn("恢复", new Runnable() { public void run() { restoreAll(); } });
         addBtn("自启", new Runnable() { public void run() { setAutoboot(); } });
+        addBtn("延时", new Runnable() { public void run() { cycleDelay(); } });
 
         LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(370));
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
@@ -265,6 +271,9 @@ public class HomeActivity extends Activity {
         if (bottomBar.getVisibility() == View.GONE) {
             AppInfo sel = shownApps.get(mainGrid.getSelectedItemPosition());
             if (sel != null) { bottomIcon.setImageDrawable(sel.icon); bottomLabel.setText(sel.label); }
+            // Update delay button label
+            TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
+            delayBtn.setText(DELAY_LABELS[delayIdx]);
             bottomBar.setVisibility(View.VISIBLE);
             bottomBar.getChildAt(2).requestFocus();
         } else { closeBar(); }
@@ -283,6 +292,12 @@ public class HomeActivity extends Activity {
             autobootPkg = s.pkg;
         }
         getSharedPreferences(PREFS,0).edit().putString(KEY_AUTOBOOT, autobootPkg).apply();
+        closeBar();
+    }
+    private void cycleDelay() {
+        delayIdx = (delayIdx + 1) % DELAY_OPTIONS.length;
+        getSharedPreferences(PREFS,0).edit().putInt(KEY_BOOT_DELAY, delayIdx).apply();
+        // Update button text
         closeBar();
     }
     private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
