@@ -43,8 +43,8 @@ public class HomeActivity extends Activity {
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final String KEY_BOOT_DELAY = "boot_delay";
     private static final long BOOT_WINDOW = 120_000;
-    private static final long[] DELAY_OPTIONS = {0, 15_000, 30_000, 60_000, 90_000};
-    private static final String[] DELAY_LABELS = {"关闭", "15秒", "30秒", "60秒", "90秒"};
+    private static final long[] DELAY_OPTIONS = {0, 15_000, 20_000, 25_000, 30_000};
+    private static final String[] DELAY_LABELS = {"关闭", "15秒", "20秒", "25秒", "30秒"};
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
