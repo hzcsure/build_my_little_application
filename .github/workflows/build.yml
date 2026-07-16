@@ -24,44 +24,68 @@ jobs:
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          # Disable cache to avoid cache service 400 errors
-          cache-disabled: true
-
-      - name: Show gradle version
-        run: gradle --version
-
-      - name: List project structure
-        run: find . -name "*.gradle" -o -name "AndroidManifest.xml" -o -name "*.java" | head -20
-
-      - name: Build APK (debug)
+      - name: Build APK manually
         run: |
-          echo "===== AVAILABLE TASKS ====="
-          gradle --no-daemon tasks --all 2>&1 | grep -iE "assemble|debug|android" | head -30
-          echo "===== CLEAN BUILD ====="
-          gradle --no-daemon clean assembleDebug 2>&1 | tee build-log.txt
-          echo "===== FIND APK ====="
-          find . -name "*.apk" -ls 2>/dev/null
-          echo "===== ENTIRE BUILD DIR ====="
-          ls -laR app/build/ 2>/dev/null || echo "No app/build/"
-          echo "===== CURRENT DIR ====="
-          pwd && ls -la
+          set -e
+          BTDIR=$ANDROID_SDK_ROOT/build-tools/28.0.3
+          ANDROID_JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
+          
+          mkdir -p build/gen build/obj build/apk
+          
+          # 1. Generate R.java (empty for us)
+          $BTDIR/aapt2 compile -o build/gen \
+            app/src/main/AndroidManifest.xml \
+            --no-crunch 2>&1 || true
+          
+          # 2. Link resources (creates base APK with just manifest)
+          $BTDIR/aapt2 link -o build/apk/base.apk \
+            -I $ANDROID_JAR \
+            --manifest app/src/main/AndroidManifest.xml \
+            --java build/gen 2>&1
+          
+          # 3. Compile Java sources
+          find app/src/main/java -name "*.java" > build/sources.txt
+          javac -d build/obj \
+            -classpath $ANDROID_JAR \
+            -source 1.8 -target 1.8 \
+            @build/sources.txt 2>&1
+          
+          # 4. Convert to DEX
+          java -jar $BTDIR/lib/d8.jar \
+            --lib $ANDROID_JAR \
+            --output build/apk/ \
+            build/obj/com/ab/boothelper/*.class 2>&1
+          
+          # 5. Add DEX to APK
+          cd build/apk
+          unzip -q base.apk -d unpacked
+          cp classes.dex unpacked/ 2>/dev/null || true
+          cd unpacked
+          zip -qr ../unsigned.apk .
+          cd ../../..
+          
+          # 6. Sign with debug key
+          keytool -genkey -v -keystore build/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Debug,O=Debug,C=US" 2>&1
+          
+          $BTDIR/apksigner sign \
+            --ks build/debug.keystore --ks-pass pass:android \
+            --out build/BootHelper.apk \
+            build/apk/unsigned.apk 2>&1
+          
+          echo "BUILD DONE"
+          ls -la build/BootHelper.apk
 
-      - name: Create Release with APK
+      - name: Upload APK to Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0
-          name: BootHelper v1.0
-          files: app/build/outputs/apk/debug/app-debug.apk
-          fail_on_unmatched_files: false
+          tag_name: latest
+          name: BootHelper
+          body: Auto-built BootHelper APK
+          files: build/BootHelper.apk
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: BuildLogs
-          path: build-log.txt
