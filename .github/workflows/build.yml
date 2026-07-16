@@ -1,0 +1,61 @@
+name: Build TVHome APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        run: |
+          ANDROID_SDK_ROOT=$ANDROID_HOME
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
+
+      - name: Build APK manually
+        run: |
+          BTDIR=$ANDROID_SDK_ROOT/build-tools/28.0.3
+          ANDROID_JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
+          mkdir -p build/obj build/apk/unpacked
+
+          # 1. aapt2 link manifest
+          $BTDIR/aapt2 link -o build/apk/base.apk \
+            -I $ANDROID_JAR --manifest app/src/main/AndroidManifest.xml
+
+          # 2. compile java
+          find app/src/main/java -name "*.java" -exec javac -d build/obj \
+            -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \;
+
+          # 3. dex
+          java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ \
+            $(find build/obj -name "*.class")
+
+          # 4. package
+          cd build/apk
+          unzip -q base.apk -d unpacked
+          mv ../unpacked/classes.dex unpacked/ 2>/dev/null || cp classes.dex unpacked/ 2>/dev/null
+          cd unpacked && zip -qr ../unsigned.apk . && cd ../..
+
+          # 5. sign
+          keytool -genkey -v -keystore build/debug.keystore -storepass android \
+            -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=A,O=A,C=US" 2>&1
+          $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
+            --out build/TVHome.apk build/apk/unsigned.apk
+
+          ls -la build/TVHome.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TVHome
+          path: build/TVHome.apk
