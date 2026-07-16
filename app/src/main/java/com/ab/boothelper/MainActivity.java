@@ -39,6 +39,12 @@ public class MainActivity extends Activity {
 
     private void disableHomeAlias() {
         try {
+            // Re-enable monet first (so it's available when our HOME disappears)
+            Runtime.getRuntime().exec(new String[]{
+                "pm", "enable", MONET_PKG
+            });
+            Thread.sleep(500);
+            
             PackageManager pm = getPackageManager();
             ComponentName homeAlias = new ComponentName(
                 "com.ab.boothelper",
