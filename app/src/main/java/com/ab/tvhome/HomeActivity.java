@@ -20,7 +20,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
-import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
@@ -33,7 +32,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class HomeActivity extends Activity {
@@ -43,10 +41,18 @@ public class HomeActivity extends Activity {
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final String KEY_BOOT_DELAY = "boot_delay";
     private static final long BOOT_WINDOW = 120_000;
-    private long[] delayOptions;   // generated: [0, 1000, 2000, ... 20000]
-    private String[] delayLabels;  // generated: ["关闭", "1秒", "2秒", ... "20秒"]
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
+
+    // Prebuilt delay table (shared across instances)
+    private static final long[] DELAY_MS = new long[21];
+    private static final String[] DELAY_LB = new String[21];
+    static {
+        for (int i = 0; i <= 20; i++) {
+            DELAY_MS[i] = i * 1000L;
+            DELAY_LB[i] = i == 0 ? "off" : i + "s";
+        }
+    }
 
     // Colors
     private static final int BG_COLOR       = 0xFF000000;
@@ -62,19 +68,17 @@ public class HomeActivity extends Activity {
 
     private GridView mainGrid;
     private AppAdapter mainAdapter;
-    private LinearLayout bottomBar, bootBar;
-    private ImageView bottomIcon, bootIcon;
-    private TextView bottomLabel, bootLabel;
+    private LinearLayout bottomBar;
+    private ImageView bottomIcon;
+    private TextView bottomLabel;
     private PackageManager pm;
     private Set<String> hiddenPkgs;
-    private Map<String, Integer> sortOrder;
     private List<AppInfo> allApps, shownApps;
     private String autobootPkg;
-    private int delayIdx = 1; // default 15s
+    private int delayIdx = 0;
 
-    private boolean editMode = false;
-    private int editPos = 0;
-    private int iconSize, gridPad, tilePad;
+    private boolean editMode, needReload = true;
+    private int editPos, iconSize, gridPad, tilePad;
     private long dpadDownTime;
 
     @Override
@@ -83,22 +87,14 @@ public class HomeActivity extends Activity {
         pm = getPackageManager();
         SharedPreferences prefs = getSharedPreferences(PREFS, 0);
         hiddenPkgs = prefs.getStringSet(KEY_HIDDEN, new HashSet<>());
-        sortOrder = loadOrder(prefs);
         autobootPkg = prefs.getString(KEY_AUTOBOOT, "");
-        delayIdx = prefs.getInt(KEY_BOOT_DELAY, 1); // default 15s
-        // Generate 20 delay slots (0=off, 1..20 seconds)
-        delayOptions = new long[21];
-        delayLabels = new String[21];
-        for (int i = 0; i <= 20; i++) {
-            delayOptions[i] = i * 1000L;
-            delayLabels[i] = i == 0 ? "关闭" : i + "秒";
-        }
+        delayIdx = prefs.getInt(KEY_BOOT_DELAY, 0);
         iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
 
-        // Boot: delayed auto-launch (configurable)
+        // Boot: delayed auto-launch
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty() && delayIdx > 0) {
             final String pkg = autobootPkg;
-            final long delay = delayOptions[delayIdx];
+            final long delay = DELAY_MS[delayIdx];
             new Handler().postDelayed(new Runnable() {
                 public void run() { launchPkg(pkg); }
             }, delay);
@@ -108,19 +104,9 @@ public class HomeActivity extends Activity {
         loadApps();
     }
 
-    @Override protected void onResume() { super.onResume(); loadApps(); }
-
-    private Map<String, Integer> loadOrder(SharedPreferences prefs) {
-        Map<String, Integer> map = new LinkedHashMap<>();
-        String s = prefs.getString(KEY_ORDER, "");
-        if (!s.isEmpty()) for (String pkg : s.split(",")) if (!pkg.isEmpty()) map.put(pkg, map.size());
-        return map;
-    }
-
-    private void saveOrder() {
-        StringBuilder sb = new StringBuilder();
-        for (AppInfo a : shownApps) { if (sb.length() > 0) sb.append(","); sb.append(a.pkg); }
-        getSharedPreferences(PREFS, 0).edit().putString(KEY_ORDER, sb.toString()).apply();
+    @Override protected void onResume() {
+        super.onResume();
+        if (needReload) { needReload = false; loadApps(); }
     }
 
     private void launchPkg(String pkg) {
@@ -180,7 +166,7 @@ public class HomeActivity extends Activity {
                         long held = event.getEventTime() - dpadDownTime;
                         dpadDownTime = 0;
                         if (held >= LONG_PRESS) toggleBottomBar();
-                        else { int pos = mainGrid.getSelectedItemPosition(); if (pos >= 0) launchPkg(shownApps.get(pos).pkg); }
+                        else { int p = mainGrid.getSelectedItemPosition(); if (p >= 0) launchPkg(shownApps.get(p).pkg); }
                         return true;
                     }
                 }
@@ -208,12 +194,12 @@ public class HomeActivity extends Activity {
         bottomLabel.setPadding(dp(12), 0, dp(12), 0);
         bottomBar.addView(bottomLabel);
 
-        addBtn("隐藏", new Runnable() { public void run() { hideSelected(); } });
-        addBtn("卸载", new Runnable() { public void run() { uninstallSelected(); } });
-        addBtn("移动", new Runnable() { public void run() { enterEditMode(); } });
-        addBtn("恢复", new Runnable() { public void run() { restoreAll(); } });
-        addBtn("自启", new Runnable() { public void run() { setAutoboot(); } });
-        addBtn("延时", new Runnable() { public void run() { cycleDelay(); } });
+        addBtn("Hide", new Runnable() { public void run() { hideSelected(); } });
+        addBtn("Uninst", new Runnable() { public void run() { uninstallSelected(); } });
+        addBtn("Move", new Runnable() { public void run() { enterEditMode(); } });
+        addBtn("Show", new Runnable() { public void run() { restoreAll(); } });
+        addBtn("Boot", new Runnable() { public void run() { setAutoboot(); } });
+        addBtn("Delay", new Runnable() { public void run() { cycleDelay(); } });
 
         LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(370));
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
@@ -256,7 +242,7 @@ public class HomeActivity extends Activity {
     private void exitEditMode() {
         editMode = false;
         for (int i = 0; i < mainGrid.getChildCount(); i++) mainGrid.getChildAt(i).clearAnimation();
-        saveOrder(); mainGrid.requestFocus();
+        saveOrder(false); mainGrid.requestFocus();
     }
     private void moveApp(int delta) {
         int newPos = editPos + delta;
@@ -278,9 +264,7 @@ public class HomeActivity extends Activity {
         if (bottomBar.getVisibility() == View.GONE) {
             AppInfo sel = shownApps.get(mainGrid.getSelectedItemPosition());
             if (sel != null) { bottomIcon.setImageDrawable(sel.icon); bottomLabel.setText(sel.label); }
-            // Update delay button label
-            TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
-            delayBtn.setText(delayLabels[delayIdx]);
+            ((TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1)).setText(DELAY_LB[delayIdx]);
             bottomBar.setVisibility(View.VISIBLE);
             bottomBar.getChildAt(2).requestFocus();
         } else { closeBar(); }
@@ -293,25 +277,21 @@ public class HomeActivity extends Activity {
     private void setAutoboot() {
         AppInfo s = shownApps.get(mainGrid.getSelectedItemPosition());
         if (s == null) return;
-        if (autobootPkg.equals(s.pkg)) {
-            autobootPkg = ""; // clear
-        } else {
-            autobootPkg = s.pkg;
-        }
+        autobootPkg = autobootPkg.equals(s.pkg) ? "" : s.pkg;
         getSharedPreferences(PREFS,0).edit().putString(KEY_AUTOBOOT, autobootPkg).apply();
         closeBar();
     }
     private void cycleDelay() {
-        delayIdx = (delayIdx + 1) % delayOptions.length;
+        delayIdx = (delayIdx + 1) % DELAY_MS.length;
         getSharedPreferences(PREFS,0).edit().putInt(KEY_BOOT_DELAY, delayIdx).apply();
-        TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
-        delayBtn.setText(delayLabels[delayIdx]);
+        ((TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1)).setText(DELAY_LB[delayIdx]);
     }
     private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
     private void saveHidden() { getSharedPreferences(PREFS,0).edit().putStringSet(KEY_HIDDEN,new HashSet<>(hiddenPkgs)).apply(); }
 
     // ============== App loading ==============
     private void loadApps() {
+        needReload = false;
         allApps = new ArrayList<>();
         Intent intent = new Intent(Intent.ACTION_MAIN, null);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -327,6 +307,7 @@ public class HomeActivity extends Activity {
             info.intent.addCategory(Intent.CATEGORY_LAUNCHER);
             allApps.add(info);
         }
+
         String orderRaw = getSharedPreferences(PREFS,0).getString(KEY_ORDER,"");
         if (!orderRaw.isEmpty()) {
             final LinkedHashMap<String,Integer> o = new LinkedHashMap<>();
@@ -339,18 +320,26 @@ public class HomeActivity extends Activity {
                 }
             });
         } else {
-            Collections.sort(allApps, new Comparator<AppInfo>() { 
+            Collections.sort(allApps, new Comparator<AppInfo>() {
                 public int compare(AppInfo a, AppInfo b) { return a.label.compareToIgnoreCase(b.label); }
             });
         }
+
         shownApps = new ArrayList<>();
         for (AppInfo a : allApps) if (!hiddenPkgs.contains(a.pkg)) shownApps.add(a);
         mainAdapter.notifyDataSetChanged();
     }
 
+    private void saveOrder(boolean flagReload) {
+        StringBuilder sb = new StringBuilder();
+        for (AppInfo a : shownApps) { if (sb.length() > 0) sb.append(","); sb.append(a.pkg); }
+        getSharedPreferences(PREFS, 0).edit().putString(KEY_ORDER, sb.toString()).apply();
+        if (flagReload) needReload = true;
+    }
+
     // ============== Adapter ==============
     static class AppInfo { String pkg, label; Drawable icon; Intent intent; }
-    
+
     class AppAdapter extends BaseAdapter {
         @Override public int getCount() { return shownApps!=null?shownApps.size():0; }
         @Override public AppInfo getItem(int pos) { return shownApps.get(pos); }
@@ -362,14 +351,11 @@ public class HomeActivity extends Activity {
             ImageView icon = (ImageView) convert.findViewWithTag("I");
             TextView label = (TextView) convert.findViewWithTag("L");
             icon.setImageDrawable(app.icon);
-            // Show auto-boot indicator
-            boolean isAutoboot = app.pkg.equals(autobootPkg);
-            label.setText(isAutoboot ? "▶ " + app.label : app.label);
-            label.setTextColor(isAutoboot ? 0xFF80D8FF : TEXT_COLOR);
-            boolean isEditing = editMode && pos == editPos;
-            if (isEditing) label.setTextColor(0xFFFFCC80);
-            GradientDrawable bg = (GradientDrawable) convert.getBackground();
-            bg.setColor(isEditing ? TILE_EDIT : TILE_COLOR);
+            boolean isBoot = app.pkg.equals(autobootPkg);
+            label.setText(isBoot ? "> " + app.label : app.label);
+            label.setTextColor(isBoot ? 0xFF80D8FF : TEXT_COLOR);
+            if (editMode && pos == editPos) label.setTextColor(0xFFFFCC80);
+            ((GradientDrawable) convert.getBackground()).setColor(editMode && pos == editPos ? TILE_EDIT : TILE_COLOR);
             return convert;
         }
     }
