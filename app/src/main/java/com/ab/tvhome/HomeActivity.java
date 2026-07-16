@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -20,7 +21,6 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.GridView;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -49,12 +49,12 @@ public class HomeActivity extends Activity {
     private List<AppInfo> allApps, shownApps;
 
     private int iconSize, gridPad, tilePad;
+    private StateListDrawable tileBg, tileBgFocused;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Cold boot: launch BBLL first
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW) {
             launchBBLL();
         }
@@ -64,6 +64,10 @@ public class HomeActivity extends Activity {
         iconSize = dp(80);
         gridPad = dp(24);
         tilePad = dp(8);
+
+        // Focus & unfocused backgrounds
+        tileBg = newStateDrawable(0x22FFFFFF, 0);
+        tileBgFocused = newStateDrawable(0x4400BFFF, dp(4)); // blue glow border when focused
 
         buildUI();
         loadApps();
@@ -75,7 +79,6 @@ public class HomeActivity extends Activity {
         loadApps();
     }
 
-    // ====== Boot BBLL ======
     private void launchBBLL() {
         try {
             Intent i = pm.getLaunchIntentForPackage(BBLL_PKG);
@@ -83,34 +86,52 @@ public class HomeActivity extends Activity {
         } catch (Exception e) { }
     }
 
+    // ====== state-list drawable ======
+    private StateListDrawable newStateDrawable(int color, int radius) {
+        GradientDrawable normal = new GradientDrawable();
+        normal.setShape(GradientDrawable.RECTANGLE);
+        normal.setCornerRadius(radius);
+        normal.setColor(color);
+
+        GradientDrawable focused = new GradientDrawable();
+        focused.setShape(GradientDrawable.RECTANGLE);
+        focused.setCornerRadius(radius);
+        focused.setColor(0x4400BFFF);
+        focused.setStroke(dp(2), 0xFF00BFFF);
+
+        StateListDrawable sld = new StateListDrawable();
+        sld.addState(new int[]{android.R.attr.state_focused}, focused);
+        sld.addState(new int[]{}, normal);
+        return sld;
+    }
+
     // ====== UI ======
     private void buildUI() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.BLACK);
+        root.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
 
         mainGrid = new GridView(this);
         mainGrid.setNumColumns(COLS);
-        mainGrid.setHorizontalSpacing(dp(4));
-        mainGrid.setVerticalSpacing(dp(12));
+        mainGrid.setHorizontalSpacing(dp(8));
+        mainGrid.setVerticalSpacing(dp(16));
         mainGrid.setPadding(gridPad, gridPad, gridPad, gridPad);
         mainGrid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
-        mainGrid.setColumnWidth(iconSize + tilePad);
-        mainGrid.setSelector(new ColorDrawable(Color.TRANSPARENT));
+        mainGrid.setColumnWidth(iconSize + tilePad * 2);
+        mainGrid.setFocusable(true);
+        mainGrid.setFocusableInTouchMode(true);
+        mainGrid.requestFocus();
 
         mainAdapter = new AppAdapter();
         mainGrid.setAdapter(mainAdapter);
         mainGrid.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
-                AppInfo app = mainAdapter.getItem(pos);
-                if (app != null && app.intent != null) {
-                    app.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(app.intent);
-                }
+                launchApp(pos);
             }
         });
 
-        // Bottom action bar (hidden by default)
+        // bottom bar
         bottomBar = new LinearLayout(this);
         bottomBar.setOrientation(LinearLayout.HORIZONTAL);
         bottomBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -129,32 +150,45 @@ public class HomeActivity extends Activity {
         bottomLabel.setPadding(dp(12), 0, dp(12), 0);
         bottomBar.addView(bottomLabel);
 
-        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
-        btnParams.setMargins(dp(8), 0, dp(8), 0);
+        addBtn("Hide", new Runnable() { public void run() { hideSelected(); } });
+        addBtn("Uninstall", new Runnable() { public void run() { uninstallSelected(); } });
+        addBtn("Restore", new Runnable() { public void run() { restoreAll(); } });
 
-        addButton(bottomBar, "Hide", new Runnable() { public void run() { hideSelected(); } });
-        addButton(bottomBar, "Uninstall", new Runnable() { public void run() { uninstallSelected(); } });
-        addButton(bottomBar, "Restore All", new Runnable() { public void run() { restoreAll(); } });
+        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
 
-        root.addView(mainGrid, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-        root.addView(bottomBar, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
-
+        root.addView(mainGrid, gridLp);
+        root.addView(bottomBar, barLp);
         setContentView(root);
     }
 
-    private void addButton(LinearLayout bar, String text, final Runnable action) {
+    private void addBtn(String text, final Runnable action) {
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.RECTANGLE);
+        g.setCornerRadius(dp(6));
+        g.setColor(0xFF444444);
+
+        GradientDrawable gf = new GradientDrawable();
+        gf.setShape(GradientDrawable.RECTANGLE);
+        gf.setCornerRadius(dp(6));
+        gf.setColor(0xFF00BFFF);
+        gf.setStroke(dp(2), 0xFFFFFFFF);
+
+        StateListDrawable bg = new StateListDrawable();
+        bg.addState(new int[]{android.R.attr.state_focused}, gf);
+        bg.addState(new int[]{}, g);
+
         TextView btn = new TextView(this);
         btn.setText(text);
         btn.setTextColor(Color.WHITE);
         btn.setTextSize(14);
         btn.setGravity(Gravity.CENTER);
         btn.setPadding(dp(16), 0, dp(16), 0);
-        btn.setBackground(rectBg(Color.GRAY));
-        btn.setClickable(true);
+        btn.setBackground(bg);
         btn.setFocusable(true);
+        btn.setClickable(true);
         btn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { action.run(); }
         });
@@ -162,24 +196,29 @@ public class HomeActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(36));
         lp.setMargins(dp(6), 0, dp(6), 0);
         btn.setLayoutParams(lp);
-        bar.addView(btn);
+        bottomBar.addView(btn);
     }
 
-    private GradientDrawable rectBg(int color) {
-        GradientDrawable g = new GradientDrawable();
-        g.setShape(GradientDrawable.RECTANGLE);
-        g.setCornerRadius(dp(6));
-        g.setColor(color);
-        return g;
-    }
-
-    // ====== Menu key ======
+    // ====== Key events ======
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // ENTER on grid item
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                    || event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+            if (mainGrid.isFocused() && mainGrid.getSelectedItemPosition() >= 0) {
+                launchApp(mainGrid.getSelectedItemPosition());
+                return true;
+            }
+        }
+
+        // Menu key
         if (event.getKeyCode() == KeyEvent.KEYCODE_MENU && event.getAction() == KeyEvent.ACTION_UP) {
             toggleBottomBar();
             return true;
         }
+
+        // Back from bottom bar
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
             if (bottomBar.getVisibility() == View.VISIBLE) {
                 bottomBar.setVisibility(View.GONE);
@@ -187,9 +226,19 @@ public class HomeActivity extends Activity {
                 return true;
             }
         }
+
         return super.dispatchKeyEvent(event);
     }
 
+    private void launchApp(int pos) {
+        AppInfo app = mainAdapter.getItem(pos);
+        if (app != null && app.intent != null) {
+            app.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(app.intent);
+        }
+    }
+
+    // ====== Bottom bar ======
     private void toggleBottomBar() {
         if (bottomBar.getVisibility() == View.GONE) {
             AppInfo sel = (AppInfo) mainGrid.getSelectedItem();
@@ -198,45 +247,26 @@ public class HomeActivity extends Activity {
                 bottomLabel.setText(sel.label);
             }
             bottomBar.setVisibility(View.VISIBLE);
-            bottomBar.requestFocus();
+            bottomBar.getChildAt(2).requestFocus(); // first button
         } else {
             bottomBar.setVisibility(View.GONE);
             mainGrid.requestFocus();
         }
     }
 
-    // ====== Actions ======
     private void hideSelected() {
         AppInfo sel = (AppInfo) mainGrid.getSelectedItem();
-        if (sel != null) {
-            hiddenPkgs.add(sel.pkg);
-            saveHidden();
-            loadApps();
-            closeBar();
-        }
+        if (sel != null) { hiddenPkgs.add(sel.pkg); saveHidden(); loadApps(); closeBar(); }
     }
-
     private void uninstallSelected() {
         AppInfo sel = (AppInfo) mainGrid.getSelectedItem();
         if (sel != null) {
-            Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + sel.pkg));
-            startActivity(i);
+            startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + sel.pkg)));
             closeBar();
         }
     }
-
-    private void restoreAll() {
-        hiddenPkgs.clear();
-        saveHidden();
-        loadApps();
-        closeBar();
-    }
-
-    private void closeBar() {
-        bottomBar.setVisibility(View.GONE);
-        mainGrid.requestFocus();
-    }
-
+    private void restoreAll() { hiddenPkgs.clear(); saveHidden(); loadApps(); closeBar(); }
+    private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
     private void saveHidden() {
         getSharedPreferences(PREFS, 0).edit().putStringSet(KEY_HIDDEN, new HashSet<>(hiddenPkgs)).apply();
     }
@@ -259,24 +289,21 @@ public class HomeActivity extends Activity {
             info.intent.addCategory(Intent.CATEGORY_LAUNCHER);
             allApps.add(info);
         }
-
         Collections.sort(allApps, new Comparator<AppInfo>() {
             public int compare(AppInfo a, AppInfo b) {
                 return a.label.compareToIgnoreCase(b.label);
             }
         });
 
-        // Split into shown/hidden
         shownApps = new ArrayList<>();
         for (AppInfo a : allApps) {
             if (!hiddenPkgs.contains(a.pkg)) shownApps.add(a);
         }
-
         mainAdapter.notifyDataSetChanged();
     }
 
     // ====== Adapter ======
-    class AppInfo {
+    static class AppInfo {
         String pkg, label;
         Drawable icon;
         Intent intent;
@@ -286,15 +313,12 @@ public class HomeActivity extends Activity {
         @Override public int getCount() { return shownApps != null ? shownApps.size() : 0; }
         @Override public AppInfo getItem(int pos) { return shownApps.get(pos); }
         @Override public long getItemId(int pos) { return pos; }
-
         @Override
         public View getView(int pos, View convert, ViewGroup parent) {
-            if (convert == null) {
-                convert = newTile();
-            }
+            if (convert == null) convert = newTile();
             AppInfo app = getItem(pos);
-            ImageView icon = (ImageView) convert.findViewWithTag("icon");
-            TextView label = (TextView) convert.findViewWithTag("label");
+            ImageView icon = (ImageView) convert.findViewWithTag("I");
+            TextView label = (TextView) convert.findViewWithTag("L");
             icon.setImageDrawable(app.icon);
             label.setText(app.label);
             return convert;
@@ -302,17 +326,35 @@ public class HomeActivity extends Activity {
     }
 
     private View newTile() {
+        GradientDrawable normal = new GradientDrawable();
+        normal.setShape(GradientDrawable.RECTANGLE);
+        normal.setCornerRadius(dp(8));
+        normal.setColor(0x22FFFFFF);
+
+        GradientDrawable focused = new GradientDrawable();
+        focused.setShape(GradientDrawable.RECTANGLE);
+        focused.setCornerRadius(dp(8));
+        focused.setColor(0x33FFFFFF);
+        focused.setStroke(dp(2), 0xFF00BFFF);
+
+        StateListDrawable bg = new StateListDrawable();
+        bg.addState(new int[]{android.R.attr.state_focused}, focused);
+        bg.addState(new int[]{}, normal);
+
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(tilePad, tilePad, tilePad, tilePad);
-        tile.setBackground(rectBg(0x22FFFFFF));
+        tile.setBackground(bg);
         tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setFocusableInTouchMode(true);
 
         ImageView icon = new ImageView(this);
         icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        icon.setTag("icon");
+        icon.setTag("I");
+        icon.setFocusable(false);
         tile.addView(icon);
 
         TextView label = new TextView(this);
@@ -320,7 +362,8 @@ public class HomeActivity extends Activity {
         label.setTextColor(Color.WHITE);
         label.setGravity(Gravity.CENTER);
         label.setMaxLines(2);
-        label.setTag("label");
+        label.setTag("L");
+        label.setFocusable(false);
         tile.addView(label);
 
         return tile;
