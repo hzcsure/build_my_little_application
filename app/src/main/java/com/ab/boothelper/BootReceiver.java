@@ -7,13 +7,16 @@ import android.os.Handler;
 
 public class BootReceiver extends BroadcastReceiver {
     private static final String TARGET_PKG = "com.V2.blb5";
-    private static final long DELAY_MS = 30000; // 30 second delay
+    private static final long DELAY_MS = 30000;
 
     @Override
     public void onReceive(final Context context, Intent intent) {
         String action = intent.getAction();
         if (Intent.ACTION_BOOT_COMPLETED.equals(action) 
                 || Intent.ACTION_USER_PRESENT.equals(action)) {
+            
+            // goAsync() keeps the receiver alive for async work
+            final PendingResult pendingResult = goAsync();
             
             new Handler().postDelayed(new Runnable() {
                 @Override
@@ -26,7 +29,9 @@ public class BootReceiver extends BroadcastReceiver {
                             context.startActivity(launch);
                         }
                     } catch (Exception e) {
-                        // Silently ignore - app may not be installed
+                        // Silently ignore
+                    } finally {
+                        pendingResult.finish(); // Must call finish() to release
                     }
                 }
             }, DELAY_MS);
