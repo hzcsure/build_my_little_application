@@ -12,6 +12,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -41,6 +42,7 @@ public class HomeActivity extends Activity {
     private static final String KEY_ORDER = "app_order";
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final long BOOT_WINDOW = 120_000;
+    private static final long BOOT_DELAY = 15_000;   // wait for network init
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
@@ -82,9 +84,12 @@ public class HomeActivity extends Activity {
         autobootPkg = prefs.getString(KEY_AUTOBOOT, "");
         iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
 
-        // Boot: launch configured auto-start app
+        // Boot: delay 15s then launch auto-boot app (wait for network init)
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty()) {
-            launchPkg(autobootPkg);
+            final String pkg = autobootPkg;
+            new Handler().postDelayed(new Runnable() {
+                public void run() { launchPkg(pkg); }
+            }, BOOT_DELAY);
         }
 
         buildUI();
