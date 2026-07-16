@@ -5,19 +5,27 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application>
-        <!-- HOME activity: launches BBLL on boot, then redirects to monet -->
+        <!-- Actual activity - no intent filters -->
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- HOME alias: makes BootHelper the default launcher.
+             DISABLED after first boot to hand back to monet -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:enabled="true"
             android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity>
+        </activity-alias>
 
-        <!-- Visible launcher icon for manual registration -->
+        <!-- LAUNCHER alias: visible icon for manual open -->
         <activity-alias
             android:name=".LauncherEntry"
             android:exported="true"
@@ -28,7 +36,6 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- ContentProvider: guaranteed to run on boot, not blocked by Xiaomi -->
         <provider
             android:name=".BootProvider"
             android:authorities="${applicationId}.init"
