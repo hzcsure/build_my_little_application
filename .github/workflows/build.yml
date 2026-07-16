@@ -25,72 +25,40 @@ jobs:
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
       - name: Build APK manually
-        id: build_apk
-        continue-on-error: true
         run: |
           BTDIR=$ANDROID_SDK_ROOT/build-tools/28.0.3
           ANDROID_JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
-          
           mkdir -p build/gen build/obj build/apk/unpacked
           
-          echo "=== 1. Check SDK ==="
-          ls -la $BTDIR/
-          ls -la $ANDROID_JAR
-          which javac && javac -version
-          
-          echo "=== 2. aapt2 link ==="
+          # 1. link manifest
           $BTDIR/aapt2 link -o build/apk/base.apk \
-            -I $ANDROID_JAR \
-            --manifest app/src/main/AndroidManifest.xml 2>&1 || true
-          ls -la build/apk/base.apk 2>/dev/null || echo "base.apk NOT created"
+            -I $ANDROID_JAR --manifest app/src/main/AndroidManifest.xml 2>&1
           
-          echo "=== 3. javac ==="
-          find app/src/main/java -name "*.java" -exec javac -d build/obj -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \; 2>&1 || true
-          find build/obj -name "*.class" -ls || echo "No .class files"
+          # 2. compile java
+          find app/src/main/java -name "*.java" -exec javac -d build/obj \
+            -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \; 2>&1
           
-          echo "=== 4. d8 dex ==="
-          CLASSES=$(find build/obj -name "*.class" | head -10)
-          if [ -n "$CLASSES" ]; then
-            java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ $CLASSES 2>&1 || true
-          else
-            echo "No classes to dex"
-          fi
-          ls -la build/apk/unpacked/classes.dex 2>/dev/null || echo "No classes.dex"
+          # 3. dex
+          java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ \
+            $(find build/obj -name "*.class") 2>&1
           
-          echo "=== 5. Package APK ==="
+          # 4. package
           cd build/apk
-          if [ -f base.apk ]; then
-            unzip -o base.apk -d unpacked 2>&1
-            cd unpacked
-            # Add classes.dex if it exists
-            [ -f ../unpacked/classes.dex ] || cp ../classes.dex . 2>/dev/null
-            zip -qr ../unsigned.apk . 2>&1
-            cd ..
-            ls -la unsigned.apk 2>/dev/null || echo "unsigned.apk NOT created"
-          fi
-          cd $GITHUB_WORKSPACE
+          unzip -q base.apk -d unpacked
+          cp unpacked/classes.dex . 2>/dev/null || cp classes.dex unpacked/ 2>/dev/null || true
+          cd unpacked && zip -qr ../unsigned.apk . && cd ../..
           
-          echo "=== 6. Sign ==="
-          if [ -f build/apk/unsigned.apk ]; then
-            keytool -genkey -v -keystore build/debug.keystore -storepass android \
-              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-              -validity 10000 -dname "CN=Debug,O=Debug,C=US" 2>&1
-            $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
-              --out build/BootHelper.apk build/apk/unsigned.apk 2>&1 || true
-            echo "SIGNED: $(ls -la build/BootHelper.apk 2>/dev/null)"
-          fi
+          # 5. sign
+          keytool -genkey -v -keystore build/debug.keystore -storepass android \
+            -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=A,O=A,C=US" 2>&1
+          $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
+            --out build/BootHelper.apk build/apk/unsigned.apk 2>&1
           
-          echo "=== 7. FINAL ==="
-          find build -name "*.apk" -ls
+          echo "=== RESULT ==="
+          ls -la build/BootHelper.apk
 
-      - name: Upload APK to Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: v1.${{ github.run_number }}
           name: BootHelper
-          body: Auto-built BootHelper APK
-          files: build/BootHelper.apk
-          make_latest: true
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: build/BootHelper.apk
