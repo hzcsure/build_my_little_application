@@ -46,17 +46,17 @@ public class HomeActivity extends Activity {
     private static final int COLS = 5;
 
     // === Colors ===
-    private static final int BG_COLOR       = 0xFF1A1A2E;
-    private static final int TILE_COLOR     = 0xFF2D2D44;
-    private static final int TILE_EDIT      = 0xFF3D3D5C;
-    private static final int FOCUS_BORDER   = 0xFFFF7043;
-    private static final int FOCUS_BG       = 0x22FF7043;
-    private static final int BAR_BG         = 0xEE1A1A2E;
-    private static final int BTN_COLOR      = 0xFF3D3D5C;
-    private static final int BTN_FOCUS_BG   = 0xFFFF7043;
+    private static final int BG_COLOR       = 0xFF000000;
+    private static final int TILE_COLOR     = 0xFF1F1F1F;
+    private static final int TILE_EDIT      = 0xFF2A2A2A;
+    private static final int FOCUS_BORDER   = 0xFF1A8FFF;  // blue
+    private static final int FOCUS_BG       = 0x00000000;  // transparent overlay
+    private static final int BAR_BG         = 0xEE000000;
+    private static final int BTN_COLOR      = 0xFF2A2A2A;
+    private static final int BTN_FOCUS_BG   = 0xFF1A8FFF;
     private static final int BTN_FOCUS_STROKE = 0xFFFFFFFF;
     private static final int TEXT_COLOR     = 0xFFCCCCCC;
-    private static final int TEXT_SIZE      = 11;
+    private static final int TEXT_SIZE      = 12;
 
     private GridView mainGrid;
     private AppAdapter mainAdapter;
@@ -83,8 +83,8 @@ public class HomeActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS, 0);
         hiddenPkgs = prefs.getStringSet(KEY_HIDDEN, new HashSet<>());
         sortOrder = loadOrder(prefs);
-        iconSize = dp(80);
-        gridPad = dp(24);
+        iconSize = dp(100);
+        gridPad = dp(32);
         tilePad = dp(8);
         buildUI();
         loadApps();
@@ -137,9 +137,14 @@ public class HomeActivity extends Activity {
         mainGrid.setFocusable(true);
         mainGrid.setFocusableInTouchMode(true);
 
-        GradientDrawable selN = new GradientDrawable(); selN.setColor(Color.TRANSPARENT);
-        GradientDrawable selF = new GradientDrawable(); selF.setShape(GradientDrawable.RECTANGLE);
-        selF.setCornerRadius(dp(8)); selF.setStroke(dp(3), FOCUS_BORDER); selF.setColor(FOCUS_BG);
+        GradientDrawable selN = new GradientDrawable();
+        selN.setShape(GradientDrawable.RECTANGLE);
+        selN.setColor(Color.TRANSPARENT);
+        GradientDrawable selF = new GradientDrawable();
+        selF.setShape(GradientDrawable.RECTANGLE);
+        selF.setCornerRadius(dp(10));
+        selF.setColor(Color.TRANSPARENT);
+        selF.setStroke(dp(3), FOCUS_BORDER);
         StateListDrawable listSel = new StateListDrawable();
         listSel.addState(new int[]{android.R.attr.state_focused}, selF);
         listSel.addState(new int[]{}, selN);
@@ -395,19 +400,20 @@ public class HomeActivity extends Activity {
     private View newTile() {
         GradientDrawable bg = new GradientDrawable();
         bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(8));
+        bg.setCornerRadius(dp(10));
         bg.setColor(TILE_COLOR);
 
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        tile.setPadding(tilePad, tilePad, tilePad, tilePad);
+        tile.setPadding(dp(4), dp(8), dp(4), dp(10));
         tile.setBackground(bg);
         tile.setFocusable(false);
         tile.setClickable(false);
 
         ImageView icon = new ImageView(this);
-        icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
+        int iconLp = iconSize + dp(16);
+        icon.setLayoutParams(new LinearLayout.LayoutParams(iconLp, iconLp));
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         icon.setTag("I"); icon.setFocusable(false);
         tile.addView(icon);
@@ -417,7 +423,9 @@ public class HomeActivity extends Activity {
         label.setTextColor(TEXT_COLOR);
         label.setGravity(Gravity.CENTER);
         label.setMaxLines(2);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setTag("L"); label.setFocusable(false);
+        label.setPadding(0, dp(6), 0, 0);
         tile.addView(label);
 
         return tile;
