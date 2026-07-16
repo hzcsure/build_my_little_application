@@ -217,34 +217,34 @@ public class HomeActivity extends Activity {
     private static final long LONG_PRESS = 500;
 
     @Override
-    public boolean dispatchKeyEvent(KeyEvent event) {
-        // Long-press DPAD_CENTER → show menu
-        if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                dpadDownTime = System.currentTimeMillis();
-                return true;
-            }
-            if (event.getAction() == KeyEvent.ACTION_UP) {
-                if (System.currentTimeMillis() - dpadDownTime >= LONG_PRESS) {
-                    toggleBottomBar();
-                } else {
-                    launchApp(mainGrid.getSelectedItemPosition());
-                }
-                dpadDownTime = 0;
-                return true;
-            }
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            dpadDownTime = System.currentTimeMillis();
+            return true; // consume DOWN so GridView doesn't act on it
         }
+        return super.onKeyDown(keyCode, event);
+    }
 
-        // Back from bottom bar
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            if (System.currentTimeMillis() - dpadDownTime >= LONG_PRESS) {
+                toggleBottomBar();
+            } else {
+                int pos = mainGrid.getSelectedItemPosition();
+                if (pos >= 0) launchApp(pos);
+            }
+            dpadDownTime = 0;
+            return true;
+        }
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (bottomBar.getVisibility() == View.VISIBLE) {
                 bottomBar.setVisibility(View.GONE);
                 mainGrid.requestFocus();
                 return true;
             }
         }
-
-        return super.dispatchKeyEvent(event);
+        return super.onKeyUp(keyCode, event);
     }
 
     private void launchApp(int pos) {
