@@ -24,31 +24,33 @@ jobs:
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
-      - uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          # Disable cache to avoid cache service 400 errors
+          cache-disabled: true
+
+      - name: Show gradle version
+        run: gradle --version
+
+      - name: List project structure
+        run: find . -name "*.gradle" -o -name "AndroidManifest.xml" -o -name "*.java" | head -20
 
       - name: Build APK (debug)
         run: |
-          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build-log.txt
-          echo "===== BUILD OUTPUT ====="
-          ls -laR app/build/outputs/ 2>/dev/null || echo "No outputs dir!"
-          echo "===== ENTIRE BUILD DIR ====="
-          ls -laR app/build/ 2>/dev/null | head -50
-
-      - name: Dump build log on failure
-        if: failure()
-        run: |
-          echo "===== BUILD FAILED ====="
-          cat build-log.txt
-
-      - name: Find APK
-        if: success()
-        run: |
-          find app -name "*.apk" -ls
+          set -x
+          gradle --no-daemon --stacktrace clean 2>&1 | head -20
+          gradle --no-daemon --stacktrace --info assembleDebug 2>&1 | tail -100
+          echo "===== POST BUILD ====="
           find . -name "*.apk" -ls
+          ls -laR app/build/ 2>/dev/null | head -30
+          echo "===== WORKSPACE FILES ====="
+          find . -type f -not -path "./.git/*" -not -path "*/build/*" 2>/dev/null | head -30
 
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: BootHelper
           path: |
-            app/build/outputs/**
+            app/build/outputs/**/*.apk
+            **/*.apk
