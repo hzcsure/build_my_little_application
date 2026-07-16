@@ -2,7 +2,7 @@ name: Build TVHome APK
 
 on:
   push:
-    branches: [tvhome, main, master]
+    branches: [launcher, tvhome]
   workflow_dispatch:
 
 jobs:
@@ -22,71 +22,46 @@ jobs:
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
-      - name: Build APK manually
+      - name: Build APK
         run: |
-          set +e  # don't stop on errors, log everything
+          set -e
           BTDIR=$ANDROID_SDK_ROOT/build-tools/28.0.3
-          ANDROID_JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
-          mkdir -p build/obj build/apk/unpacked
-          LOG=build/build.log
+          JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
+          rm -rf build; mkdir -p build/obj build/apk
 
-          {
-            echo "=== Structure check ==="
-            ls -la app/src/main/
-            ls -la app/src/main/java/com/ab/tvhome/
+          echo "--- 1. aapt2: link manifest ---"
+          $BTDIR/aapt2 link -o build/apk/base.apk -I $JAR \
+            --manifest app/src/main/AndroidManifest.xml
 
-            echo "=== aapt2 link ==="
-            $BTDIR/aapt2 link -o build/apk/base.apk \
-              -I $ANDROID_JAR --manifest app/src/main/AndroidManifest.xml
-            ls -la build/apk/base.apk 2>&1
+          echo "--- 2. javac ---"
+          find app/src/main/java -name "*.java" > build/sources.txt
+          javac -d build/obj -classpath $JAR -source 1.8 -target 1.8 @build/sources.txt
+          find build/obj -name "*.class" | head
 
-            echo "=== javac ==="
-            find app/src/main/java -name "*.java" -exec javac -d build/obj \
-              -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \;
-            echo "Class files:"
-            find build/obj -name "*.class" -ls 2>&1
+          echo "--- 3. d8 ---"
+          java -jar $BTDIR/lib/d8.jar --output build/apk/ \
+            $(find build/obj -name "*.class")
+          ls -la build/apk/classes.dex
 
-            echo "=== d8 ==="
-            CLASSES=$(find build/obj -name "*.class")
-            if [ -n "$CLASSES" ]; then
-              java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ $CLASSES
-            else
-              echo "NO .class files - javac failed"
-            fi
-            ls -la build/apk/unpacked/classes.dex 2>&1
+          echo "--- 4. package ---"
+          cd build/apk
+          unzip -q base.apk -d unpacked
+          cp classes.dex unpacked/
+          cd unpacked && zip -qr ../unsigned.apk .
+          cd $GITHUB_WORKSPACE
+          ls -la build/apk/unsigned.apk
 
-            echo "=== Package ==="
-            cd build/apk
-            unzip -q base.apk -d unpacked
-            cp ../unpacked/classes.dex unpacked/ 2>/dev/null || true
-            cd unpacked && zip -qr ../unsigned.apk . && cd ../..
-            ls -la build/apk/unsigned.apk 2>&1
+          echo "--- 5. sign ---"
+          keytool -genkey -keystore build/debug.ks -storepass android \
+            -alias a -keypass android -keyalg RSA -keysize 2048 -validity 36500 \
+            -dname "CN=TVHome" 2>/dev/null || true
+          $BTDIR/apksigner sign --ks build/debug.ks --ks-pass pass:android \
+            --out build/TVHome.apk build/apk/unsigned.apk
 
-            echo "=== Sign ==="
-            keytool -genkey -v -keystore build/debug.keystore -storepass android \
-              -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=A,O=A,C=US" 2>&1
-            $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
-              --out build/TVHome.apk build/apk/unsigned.apk 2>&1
-            echo "RESULT:"
-            ls -la build/TVHome.apk 2>&1
-          } > $LOG 2>&1
-
-          cat $LOG
-          echo "=== APK check ==="
-          ls -la build/TVHome.apk 2>&1 || echo "NO APK"
-          file build/TVHome.apk 2>&1 || true
-          echo "exit=$?"
+          echo "--- DONE ---"
+          ls -la build/TVHome.apk
 
       - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: TVHomeBuildLog
-          path: build/build.log
-
-      - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: TVHome
           path: build/TVHome.apk
-        continue-on-error: true
