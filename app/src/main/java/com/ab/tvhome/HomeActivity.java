@@ -7,7 +7,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
@@ -37,20 +36,19 @@ import java.util.Map;
 import java.util.Set;
 
 public class HomeActivity extends Activity {
-    private static final String BBLL_PKG = "com.V2.blb5";
     private static final String PREFS = "launcher_prefs";
     private static final String KEY_HIDDEN = "hidden_packages";
     private static final String KEY_ORDER = "app_order";
+    private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final long BOOT_WINDOW = 120_000;
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
-    // === Colors ===
+    // Colors
     private static final int BG_COLOR       = 0xFF000000;
     private static final int TILE_COLOR     = 0xFF1F1F1F;
     private static final int TILE_EDIT      = 0xFF2A2A2A;
-    private static final int FOCUS_BORDER   = 0xFF1A8FFF;  // blue
-    private static final int FOCUS_BG       = 0x00000000;  // transparent overlay
+    private static final int FOCUS_BORDER   = 0xFF1A8FFF;
     private static final int BAR_BG         = 0xEE000000;
     private static final int BTN_COLOR      = 0xFF2A2A2A;
     private static final int BTN_FOCUS_BG   = 0xFF1A8FFF;
@@ -60,32 +58,35 @@ public class HomeActivity extends Activity {
 
     private GridView mainGrid;
     private AppAdapter mainAdapter;
-    private LinearLayout bottomBar;
-    private ImageView bottomIcon;
-    private TextView bottomLabel;
+    private LinearLayout bottomBar, bootBar;
+    private ImageView bottomIcon, bootIcon;
+    private TextView bottomLabel, bootLabel;
     private PackageManager pm;
     private Set<String> hiddenPkgs;
-    private Map<String, Integer> sortOrder; // pkg -> position
+    private Map<String, Integer> sortOrder;
     private List<AppInfo> allApps, shownApps;
+    private String autobootPkg;
 
-    // Edit mode
     private boolean editMode = false;
     private int editPos = 0;
-
     private int iconSize, gridPad, tilePad;
     private long dpadDownTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (SystemClock.elapsedRealtime() < BOOT_WINDOW) launchBBLL();
         pm = getPackageManager();
         SharedPreferences prefs = getSharedPreferences(PREFS, 0);
         hiddenPkgs = prefs.getStringSet(KEY_HIDDEN, new HashSet<>());
         sortOrder = loadOrder(prefs);
-        iconSize = dp(100);
-        gridPad = dp(32);
-        tilePad = dp(8);
+        autobootPkg = prefs.getString(KEY_AUTOBOOT, "");
+        iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
+
+        // Boot: launch configured auto-start app
+        if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty()) {
+            launchPkg(autobootPkg);
+        }
+
         buildUI();
         loadApps();
     }
@@ -95,27 +96,19 @@ public class HomeActivity extends Activity {
     private Map<String, Integer> loadOrder(SharedPreferences prefs) {
         Map<String, Integer> map = new LinkedHashMap<>();
         String s = prefs.getString(KEY_ORDER, "");
-        if (!s.isEmpty()) {
-            String[] pkgs = s.split(",");
-            for (int i = 0; i < pkgs.length; i++) {
-                if (!pkgs[i].isEmpty()) map.put(pkgs[i], i);
-            }
-        }
+        if (!s.isEmpty()) for (String pkg : s.split(",")) if (!pkg.isEmpty()) map.put(pkg, map.size());
         return map;
     }
 
     private void saveOrder() {
         StringBuilder sb = new StringBuilder();
-        for (AppInfo a : shownApps) {
-            if (sb.length() > 0) sb.append(",");
-            sb.append(a.pkg);
-        }
+        for (AppInfo a : shownApps) { if (sb.length() > 0) sb.append(","); sb.append(a.pkg); }
         getSharedPreferences(PREFS, 0).edit().putString(KEY_ORDER, sb.toString()).apply();
     }
 
-    private void launchBBLL() {
+    private void launchPkg(String pkg) {
         try {
-            Intent i = pm.getLaunchIntentForPackage(BBLL_PKG);
+            Intent i = pm.getLaunchIntentForPackage(pkg);
             if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }
         } catch (Exception e) { }
     }
@@ -138,13 +131,10 @@ public class HomeActivity extends Activity {
         mainGrid.setFocusableInTouchMode(true);
         mainGrid.setSmoothScrollbarEnabled(false);
 
-        GradientDrawable selN = new GradientDrawable();
-        selN.setShape(GradientDrawable.RECTANGLE);
+        GradientDrawable selN = new GradientDrawable(); selN.setShape(GradientDrawable.RECTANGLE);
         selN.setColor(Color.TRANSPARENT);
-        GradientDrawable selF = new GradientDrawable();
-        selF.setShape(GradientDrawable.RECTANGLE);
-        selF.setCornerRadius(dp(10));
-        selF.setColor(Color.TRANSPARENT);
+        GradientDrawable selF = new GradientDrawable(); selF.setShape(GradientDrawable.RECTANGLE);
+        selF.setCornerRadius(dp(10)); selF.setColor(Color.TRANSPARENT);
         selF.setStroke(dp(3), FOCUS_BORDER);
         StateListDrawable listSel = new StateListDrawable();
         listSel.addState(new int[]{android.R.attr.state_focused}, selF);
@@ -156,7 +146,6 @@ public class HomeActivity extends Activity {
         mainAdapter = new AppAdapter();
         mainGrid.setAdapter(mainAdapter);
 
-        // Key listener on GridView - fires before GridView processes the key
         mainGrid.setOnKeyListener(new View.OnKeyListener() {
             @Override
             public boolean onKey(View v, int keyCode, KeyEvent event) {
@@ -165,40 +154,27 @@ public class HomeActivity extends Activity {
                     if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT)  { moveApp(-1); return true; }
                     if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { moveApp(1); return true; }
                     if (keyCode == KeyEvent.KEYCODE_BACK) { exitEditMode(); return true; }
-                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                        dpadDownTime = event.getDownTime();
-                        return true;
-                    }
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) { dpadDownTime = event.getDownTime(); return true; }
                     return true;
                 }
-                // DPAD_CENTER timing: DOWN records time, ACTION_UP checks duration
                 if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
-                    if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                        dpadDownTime = event.getDownTime();
-                        return true;
-                    }
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) { dpadDownTime = event.getDownTime(); return true; }
                     if (event.getAction() == KeyEvent.ACTION_UP) {
                         long held = event.getEventTime() - dpadDownTime;
                         dpadDownTime = 0;
-                        if (held >= LONG_PRESS) {
-                            toggleBottomBar();
-                        } else {
-                            int pos = mainGrid.getSelectedItemPosition();
-                            if (pos >= 0) launchApp(pos);
-                        }
+                        if (held >= LONG_PRESS) toggleBottomBar();
+                        else { int pos = mainGrid.getSelectedItemPosition(); if (pos >= 0) launchPkg(shownApps.get(pos).pkg); }
                         return true;
                     }
                 }
                 if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                    if (bottomBar.getVisibility() == View.VISIBLE) {
-                        bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); return true;
-                    }
+                    if (bottomBar.getVisibility() == View.VISIBLE) { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); return true; }
                 }
                 return false;
             }
         });
 
-        // bottom bar
+        // Bottom bar
         bottomBar = new LinearLayout(this);
         bottomBar.setOrientation(LinearLayout.HORIZONTAL);
         bottomBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -210,22 +186,20 @@ public class HomeActivity extends Activity {
         bottomIcon = new ImageView(this);
         bottomIcon.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(40)));
         bottomBar.addView(bottomIcon);
-
         bottomLabel = new TextView(this);
-        bottomLabel.setTextColor(TEXT_COLOR);
-        bottomLabel.setTextSize(14);
+        bottomLabel.setTextColor(TEXT_COLOR); bottomLabel.setTextSize(14);
         bottomLabel.setPadding(dp(12), 0, dp(12), 0);
         bottomBar.addView(bottomLabel);
 
-        addBtn("Hide", new Runnable() { public void run() { hideSelected(); } });
-        addBtn("Uninstall", new Runnable() { public void run() { uninstallSelected(); } });
-        addBtn("Move", new Runnable() { public void run() { enterEditMode(); } });
-        addBtn("Restore", new Runnable() { public void run() { restoreAll(); } });
+        addBtn("隐藏", new Runnable() { public void run() { hideSelected(); } });
+        addBtn("卸载", new Runnable() { public void run() { uninstallSelected(); } });
+        addBtn("移动", new Runnable() { public void run() { enterEditMode(); } });
+        addBtn("恢复", new Runnable() { public void run() { restoreAll(); } });
+        addBtn("自启", new Runnable() { public void run() { setAutoboot(); } });
 
-        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(370)); // 348+22
+        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(370));
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
-        root.addView(new View(this), // spacer——pushes grid to bottom
-            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        root.addView(new View(this), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         root.addView(mainGrid, gridLp);
         root.addView(bottomBar, barLp);
         setContentView(root);
@@ -239,28 +213,21 @@ public class HomeActivity extends Activity {
         StateListDrawable bg = new StateListDrawable();
         bg.addState(new int[]{android.R.attr.state_focused}, gf);
         bg.addState(new int[]{}, g);
-
         TextView btn = new TextView(this);
         btn.setText(text); btn.setTextColor(TEXT_COLOR); btn.setTextSize(14);
-        btn.setGravity(Gravity.CENTER); btn.setPadding(dp(16), 0, dp(16), 0);
+        btn.setGravity(Gravity.CENTER); btn.setPadding(dp(14), 0, dp(14), 0);
         btn.setBackground(bg); btn.setFocusable(true); btn.setClickable(true);
         btn.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { action.run(); } });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36));
-        lp.setMargins(dp(6), 0, dp(6), 0);
+        lp.setMargins(dp(4), 0, dp(4), 0);
         btn.setLayoutParams(lp);
         bottomBar.addView(btn);
     }
 
-    // ============== Key events ======
-    // Edit mode keys handled by mainGrid.setOnKeyListener above
-
     // ============== Edit mode ==============
     private void enterEditMode() {
-        editMode = true;
-        editPos = mainGrid.getSelectedItemPosition();
-        closeBar();
-        mainAdapter.notifyDataSetChanged(); // re-render with edit style
-        // Blink animation on the selected tile
+        editMode = true; editPos = mainGrid.getSelectedItemPosition(); closeBar();
+        mainAdapter.notifyDataSetChanged();
         View sel = mainGrid.getSelectedView();
         if (sel != null) {
             AlphaAnimation blink = new AlphaAnimation(1.0f, 0.3f);
@@ -268,17 +235,11 @@ public class HomeActivity extends Activity {
             sel.startAnimation(blink);
         }
     }
-
     private void exitEditMode() {
         editMode = false;
-        // Clear all animations
-        for (int i = 0; i < mainGrid.getChildCount(); i++) {
-            mainGrid.getChildAt(i).clearAnimation();
-        }
-        saveOrder();
-        mainGrid.requestFocus();
+        for (int i = 0; i < mainGrid.getChildCount(); i++) mainGrid.getChildAt(i).clearAnimation();
+        saveOrder(); mainGrid.requestFocus();
     }
-
     private void moveApp(int delta) {
         int newPos = editPos + delta;
         if (newPos < 0 || newPos >= shownApps.size()) return;
@@ -287,23 +248,10 @@ public class HomeActivity extends Activity {
         editPos = newPos;
         mainAdapter.notifyDataSetChanged();
         mainGrid.setSelection(editPos);
-        // Blink the new position
         View sel = mainGrid.getSelectedView();
-        if (sel != null) {
-            sel.clearAnimation();
-            AlphaAnimation blink = new AlphaAnimation(1.0f, 0.3f);
-            blink.setDuration(300); blink.setRepeatMode(Animation.REVERSE); blink.setRepeatCount(Animation.INFINITE);
-            sel.startAnimation(blink);
-        }
-    }
-
-    // ============== App launching ==============
-    private void launchApp(int pos) {
-        AppInfo app = shownApps.get(pos);
-        if (app != null && app.intent != null) {
-            app.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(app.intent);
-        }
+        if (sel != null) { sel.clearAnimation(); sel.startAnimation(new AlphaAnimation(1.0f, 0.3f){{
+            setDuration(300); setRepeatMode(Animation.REVERSE); setRepeatCount(Animation.INFINITE);
+        }}); }
     }
 
     // ============== Bottom bar ==============
@@ -316,20 +264,24 @@ public class HomeActivity extends Activity {
             bottomBar.getChildAt(2).requestFocus();
         } else { closeBar(); }
     }
-
-    private void hideSelected() {
-        AppInfo sel = shownApps.get(mainGrid.getSelectedItemPosition());
-        if (sel != null) { hiddenPkgs.add(sel.pkg); saveHidden(); loadApps(); closeBar(); }
-    }
-    private void uninstallSelected() {
-        AppInfo sel = shownApps.get(mainGrid.getSelectedItemPosition());
-        if (sel != null) { startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:"+sel.pkg))); closeBar(); }
-    }
+    private void hideSelected() { AppInfo s=shownApps.get(mainGrid.getSelectedItemPosition());
+        if(s!=null){hiddenPkgs.add(s.pkg);saveHidden();loadApps();closeBar();}}
+    private void uninstallSelected() { AppInfo s=shownApps.get(mainGrid.getSelectedItemPosition());
+        if(s!=null){startActivity(new Intent(Intent.ACTION_DELETE,Uri.parse("package:"+s.pkg)));closeBar();}}
     private void restoreAll() { hiddenPkgs.clear(); saveHidden(); loadApps(); closeBar(); }
-    private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
-    private void saveHidden() {
-        getSharedPreferences(PREFS,0).edit().putStringSet(KEY_HIDDEN,new HashSet<>(hiddenPkgs)).apply();
+    private void setAutoboot() {
+        AppInfo s = shownApps.get(mainGrid.getSelectedItemPosition());
+        if (s == null) return;
+        if (autobootPkg.equals(s.pkg)) {
+            autobootPkg = ""; // clear
+        } else {
+            autobootPkg = s.pkg;
+        }
+        getSharedPreferences(PREFS,0).edit().putString(KEY_AUTOBOOT, autobootPkg).apply();
+        closeBar();
     }
+    private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
+    private void saveHidden() { getSharedPreferences(PREFS,0).edit().putStringSet(KEY_HIDDEN,new HashSet<>(hiddenPkgs)).apply(); }
 
     // ============== App loading ==============
     private void loadApps() {
@@ -337,7 +289,6 @@ public class HomeActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_MAIN, null);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
         List<ResolveInfo> resolved = pm.queryIntentActivities(intent, 0);
-
         for (ResolveInfo ri : resolved) {
             if (ri.activityInfo.packageName.equals(getPackageName())) continue;
             AppInfo info = new AppInfo();
@@ -349,38 +300,32 @@ public class HomeActivity extends Activity {
             info.intent.addCategory(Intent.CATEGORY_LAUNCHER);
             allApps.add(info);
         }
-
-        String orderRaw = getSharedPreferences(PREFS, 0).getString(KEY_ORDER, "");
-        if (!orderRaw.isEmpty()) { // sort by saved order, new apps appended at end
-            final LinkedHashMap<String, Integer> order = new LinkedHashMap<>();
-            String[] pkgs = orderRaw.split(",");
-            for (int i = 0; i < pkgs.length; i++) order.put(pkgs[i], i);
+        String orderRaw = getSharedPreferences(PREFS,0).getString(KEY_ORDER,"");
+        if (!orderRaw.isEmpty()) {
+            final LinkedHashMap<String,Integer> o = new LinkedHashMap<>();
+            for (String p : orderRaw.split(",")) if(!p.isEmpty()) o.put(p, o.size());
             Collections.sort(allApps, new Comparator<AppInfo>() {
                 public int compare(AppInfo a, AppInfo b) {
-                    int oa = order.containsKey(a.pkg) ? order.get(a.pkg) : Integer.MAX_VALUE;
-                    int ob = order.containsKey(b.pkg) ? order.get(b.pkg) : Integer.MAX_VALUE;
-                    if (oa != ob) return oa - ob;
-                    return a.label.compareToIgnoreCase(b.label);
+                    int oa=o.containsKey(a.pkg)?o.get(a.pkg):Integer.MAX_VALUE;
+                    int ob=o.containsKey(b.pkg)?o.get(b.pkg):Integer.MAX_VALUE;
+                    return oa!=ob?oa-ob:a.label.compareToIgnoreCase(b.label);
                 }
             });
         } else {
-            Collections.sort(allApps, new Comparator<AppInfo>() {
+            Collections.sort(allApps, new Comparator<AppInfo>() { 
                 public int compare(AppInfo a, AppInfo b) { return a.label.compareToIgnoreCase(b.label); }
             });
         }
-
         shownApps = new ArrayList<>();
-        for (AppInfo a : allApps) {
-            if (!hiddenPkgs.contains(a.pkg)) shownApps.add(a);
-        }
+        for (AppInfo a : allApps) if (!hiddenPkgs.contains(a.pkg)) shownApps.add(a);
         mainAdapter.notifyDataSetChanged();
     }
 
     // ============== Adapter ==============
     static class AppInfo { String pkg, label; Drawable icon; Intent intent; }
-
+    
     class AppAdapter extends BaseAdapter {
-        @Override public int getCount() { return shownApps != null ? shownApps.size() : 0; }
+        @Override public int getCount() { return shownApps!=null?shownApps.size():0; }
         @Override public AppInfo getItem(int pos) { return shownApps.get(pos); }
         @Override public long getItemId(int pos) { return pos; }
         @Override
@@ -390,10 +335,12 @@ public class HomeActivity extends Activity {
             ImageView icon = (ImageView) convert.findViewWithTag("I");
             TextView label = (TextView) convert.findViewWithTag("L");
             icon.setImageDrawable(app.icon);
-            label.setText(app.label);
-            // Edit mode: dim non-selected tiles
+            // Show auto-boot indicator
+            boolean isAutoboot = app.pkg.equals(autobootPkg);
+            label.setText(isAutoboot ? "▶ " + app.label : app.label);
+            label.setTextColor(isAutoboot ? 0xFF80D8FF : TEXT_COLOR);
             boolean isEditing = editMode && pos == editPos;
-            label.setTextColor(isEditing ? 0xFFFFCC80 : TEXT_COLOR);
+            if (isEditing) label.setTextColor(0xFFFFCC80);
             GradientDrawable bg = (GradientDrawable) convert.getBackground();
             bg.setColor(isEditing ? TILE_EDIT : TILE_COLOR);
             return convert;
@@ -402,39 +349,23 @@ public class HomeActivity extends Activity {
 
     private View newTile() {
         GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(10));
-        bg.setColor(TILE_COLOR);
-
+        bg.setShape(GradientDrawable.RECTANGLE); bg.setCornerRadius(dp(10)); bg.setColor(TILE_COLOR);
         LinearLayout tile = new LinearLayout(this);
-        tile.setOrientation(LinearLayout.VERTICAL);
-        tile.setGravity(Gravity.CENTER);
+        tile.setOrientation(LinearLayout.VERTICAL); tile.setGravity(Gravity.CENTER);
         tile.setPadding(dp(4), dp(8), dp(4), dp(10));
-        tile.setBackground(bg);
-        tile.setFocusable(false);
-        tile.setClickable(false);
-
+        tile.setBackground(bg); tile.setFocusable(false); tile.setClickable(false);
         ImageView icon = new ImageView(this);
-        int iconLp = iconSize + dp(16);
-        icon.setLayoutParams(new LinearLayout.LayoutParams(iconLp, iconLp));
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        icon.setTag("I"); icon.setFocusable(false);
+        icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize+dp(16), iconSize+dp(16)));
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER); icon.setTag("I"); icon.setFocusable(false);
         tile.addView(icon);
-
         TextView label = new TextView(this);
-        label.setTextSize(TEXT_SIZE);
-        label.setTextColor(TEXT_COLOR);
-        label.setGravity(Gravity.CENTER);
-        label.setMaxLines(2);
+        label.setTextSize(TEXT_SIZE); label.setTextColor(TEXT_COLOR);
+        label.setGravity(Gravity.CENTER); label.setMaxLines(2);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        label.setTag("L"); label.setFocusable(false);
-        label.setPadding(0, dp(6), 0, 0);
+        label.setTag("L"); label.setFocusable(false); label.setPadding(0, dp(6), 0, 0);
         tile.addView(label);
-
         return tile;
     }
 
-    private int dp(int px) {
-        return (int)(px * getResources().getDisplayMetrics().density + 0.5f);
-    }
+    private int dp(int px) { return (int)(px * getResources().getDisplayMetrics().density + 0.5f); }
 }

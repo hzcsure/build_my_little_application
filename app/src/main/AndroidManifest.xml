@@ -6,7 +6,9 @@
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="28" />
 
-    <application>
+    <application
+        android:label="TVHome"
+        android:icon="@android:drawable/sym_def_app_icon">
         <activity
             android:name=".HomeActivity"
             android:exported="true"
