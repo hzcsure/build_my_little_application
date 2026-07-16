@@ -2,7 +2,7 @@ name: Build TVHome APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [tvhome, main, master]
   workflow_dispatch:
 
 jobs:
@@ -43,7 +43,7 @@ jobs:
           # 4. package
           cd build/apk
           unzip -q base.apk -d unpacked
-          mv ../unpacked/classes.dex unpacked/ 2>/dev/null || cp classes.dex unpacked/ 2>/dev/null
+          cp ../unpacked/classes.dex unpacked/ 2>/dev/null || true
           cd unpacked && zip -qr ../unsigned.apk . && cd ../..
 
           # 5. sign
