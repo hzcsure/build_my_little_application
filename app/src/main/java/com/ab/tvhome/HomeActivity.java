@@ -131,7 +131,7 @@ public class HomeActivity extends Activity {
         mainGrid.setNumColumns(COLS);
         mainGrid.setHorizontalSpacing(dp(16));
         mainGrid.setVerticalSpacing(dp(20));
-        mainGrid.setPadding(dp(60), dp(60), dp(60), dp(60));
+        mainGrid.setPadding(dp(20), dp(0), dp(20), dp(20));
         mainGrid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
         mainGrid.setColumnWidth(iconSize + tilePad * 2);
         mainGrid.setFocusable(true);
@@ -222,7 +222,7 @@ public class HomeActivity extends Activity {
         addBtn("Move", new Runnable() { public void run() { enterEditMode(); } });
         addBtn("Restore", new Runnable() { public void run() { restoreAll(); } });
 
-        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(348)); // 2 rows = 154*2 + 20 spacer + 20 bottom
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
         root.addView(mainGrid, gridLp);
         root.addView(bottomBar, barLp);
