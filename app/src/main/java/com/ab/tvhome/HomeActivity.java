@@ -43,8 +43,8 @@ public class HomeActivity extends Activity {
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final String KEY_BOOT_DELAY = "boot_delay";
     private static final long BOOT_WINDOW = 120_000;
-    private static final long[] DELAY_OPTIONS = {0, 15_000, 20_000, 25_000, 30_000};
-    private static final String[] DELAY_LABELS = {"关闭", "15秒", "20秒", "25秒", "30秒"};
+    private long[] delayOptions;   // generated: [0, 1000, 2000, ... 20000]
+    private String[] delayLabels;  // generated: ["关闭", "1秒", "2秒", ... "20秒"]
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
@@ -86,12 +86,18 @@ public class HomeActivity extends Activity {
         sortOrder = loadOrder(prefs);
         autobootPkg = prefs.getString(KEY_AUTOBOOT, "");
         delayIdx = prefs.getInt(KEY_BOOT_DELAY, 1); // default 15s
-        iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
+        // Generate 20 delay slots (0=off, 1..20 seconds)
+        delayOptions = new long[21];
+        delayLabels = new String[21];
+        for (int i = 0; i <= 20; i++) {
+            delayOptions[i] = i * 1000L;
+            delayLabels[i] = i == 0 ? "关闭" : i + "秒";
+        }
 
         // Boot: delayed auto-launch (configurable)
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty() && delayIdx > 0) {
             final String pkg = autobootPkg;
-            final long delay = DELAY_OPTIONS[delayIdx];
+            final long delay = delayOptions[delayIdx];
             new Handler().postDelayed(new Runnable() {
                 public void run() { launchPkg(pkg); }
             }, delay);
@@ -273,7 +279,7 @@ public class HomeActivity extends Activity {
             if (sel != null) { bottomIcon.setImageDrawable(sel.icon); bottomLabel.setText(sel.label); }
             // Update delay button label
             TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
-            delayBtn.setText(DELAY_LABELS[delayIdx]);
+            delayBtn.setText(delayLabels[delayIdx]);
             bottomBar.setVisibility(View.VISIBLE);
             bottomBar.getChildAt(2).requestFocus();
         } else { closeBar(); }
@@ -295,11 +301,10 @@ public class HomeActivity extends Activity {
         closeBar();
     }
     private void cycleDelay() {
-        delayIdx = (delayIdx + 1) % DELAY_OPTIONS.length;
+        delayIdx = (delayIdx + 1) % delayOptions.length;
         getSharedPreferences(PREFS,0).edit().putInt(KEY_BOOT_DELAY, delayIdx).apply();
-        // Update button label without closing bar
         TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
-        delayBtn.setText(DELAY_LABELS[delayIdx]);
+        delayBtn.setText(delayLabels[delayIdx]);
     }
     private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
     private void saveHidden() { getSharedPreferences(PREFS,0).edit().putStringSet(KEY_HIDDEN,new HashSet<>(hiddenPkgs)).apply(); }
