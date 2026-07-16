@@ -41,12 +41,19 @@ jobs:
       - name: Sign APK
         if: success()
         run: |
-          echo "=== All APKs ===" && find app/build -name "*.apk" -ls
-          APK=$(find app/build -name "*.apk" -not -name "BootHelper.apk" | head -1)
+          echo "=== All APKs ===" && find app -name "*.apk" -ls 2>/dev/null
+          echo "=== Release dir ===" && ls -laR app/build/outputs/apk/release/ 2>/dev/null || echo "no release dir"
+          echo "=== All outputs ===" && find app/build/outputs -type f 2>/dev/null | head -20
+          APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK found in app/build/outputs/apk!"
+            exit 1
+          fi
           echo "Signing: $APK"
           keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA \
             -keysize 2048 -validity 10000 -storepass android -keypass android \
             -dname "CN=BootHelper, OU=Dev, O=BootHelper, L=NA, ST=NA, C=US"
+          mkdir -p app/build/outputs/apk/release
           $ANDROID_SDK_ROOT/build-tools/28.0.3/apksigner sign \
             --ks debug.keystore --ks-pass pass:android \
             --out app/build/outputs/apk/release/BootHelper.apk \
