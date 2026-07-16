@@ -297,8 +297,9 @@ public class HomeActivity extends Activity {
     private void cycleDelay() {
         delayIdx = (delayIdx + 1) % DELAY_OPTIONS.length;
         getSharedPreferences(PREFS,0).edit().putInt(KEY_BOOT_DELAY, delayIdx).apply();
-        // Update button text
-        closeBar();
+        // Update button label without closing bar
+        TextView delayBtn = (TextView) bottomBar.getChildAt(bottomBar.getChildCount()-1);
+        delayBtn.setText(DELAY_LABELS[delayIdx]);
     }
     private void closeBar() { bottomBar.setVisibility(View.GONE); mainGrid.requestFocus(); }
     private void saveHidden() { getSharedPreferences(PREFS,0).edit().putStringSet(KEY_HIDDEN,new HashSet<>(hiddenPkgs)).apply(); }
