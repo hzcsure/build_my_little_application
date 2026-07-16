@@ -19,10 +19,16 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          ANDROID_SDK_ROOT=$ANDROID_HOME
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          curl -sSLO https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools
+          mv cmdline-tools-tools cmdline-tools/latest 2>/dev/null || true
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
       - uses: gradle/actions/setup-gradle@v3
 
@@ -34,8 +40,7 @@ jobs:
           APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "unsigned" | head -1)
           keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA \
             -keysize 2048 -validity 10000 -storepass android -keypass android \
-            -dname "CN=BootHelper, OU=Dev, O=BootHelper, L=NA, ST=NA, C=US" \
-            2>/dev/null || true
+            -dname "CN=BootHelper, OU=Dev, O=BootHelper, L=NA, ST=NA, C=US"
           $ANDROID_SDK_ROOT/build-tools/28.0.3/apksigner sign \
             --ks debug.keystore --ks-pass pass:android \
             --out app/build/outputs/apk/release/BootHelper.apk \
