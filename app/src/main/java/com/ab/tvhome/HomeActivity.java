@@ -129,9 +129,9 @@ public class HomeActivity extends Activity {
 
         mainGrid = new GridView(this);
         mainGrid.setNumColumns(COLS);
-        mainGrid.setHorizontalSpacing(dp(8));
-        mainGrid.setVerticalSpacing(dp(16));
-        mainGrid.setPadding(gridPad, gridPad, gridPad, gridPad);
+        mainGrid.setHorizontalSpacing(dp(16));
+        mainGrid.setVerticalSpacing(dp(20));
+        mainGrid.setPadding(dp(40), dp(180), dp(40), dp(40));
         mainGrid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
         mainGrid.setColumnWidth(iconSize + tilePad * 2);
         mainGrid.setFocusable(true);
