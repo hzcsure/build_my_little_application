@@ -17,14 +17,12 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Debug existing SDK
+      - name: Setup Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la $ANDROID_HOME 2>/dev/null || echo "No ANDROID_HOME"
-          ls -la /usr/local/lib/android/sdk 2>/dev/null || echo "No /usr/local/lib/android/sdk"
-          ls -la $HOME/android-sdk 2>/dev/null || echo "No ~/android-sdk"
-          which sdkmanager 2>/dev/null || echo "No sdkmanager"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-28" "build-tools;28.0.3"
 
       - uses: gradle/actions/setup-gradle@v3
 
