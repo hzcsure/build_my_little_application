@@ -35,8 +35,14 @@ jobs:
           echo "===== BUILD FAILED ====="
           cat build-log.txt
 
+      - name: Find APK
+        if: success()
+        run: |
+          find app -name "*.apk" -ls
+          find . -name "*.apk" -ls
+
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: BootHelper
-          path: app/build/outputs/apk/debug/*.apk
+          path: "**/*.apk"
