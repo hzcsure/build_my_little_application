@@ -222,8 +222,10 @@ public class HomeActivity extends Activity {
         addBtn("Move", new Runnable() { public void run() { enterEditMode(); } });
         addBtn("Restore", new Runnable() { public void run() { restoreAll(); } });
 
-        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(348)); // 2 rows = 154*2 + 20 spacer + 20 bottom
+        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(370)); // 348+22
         LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        root.addView(new View(this), // spacer——pushes grid to bottom
+            new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         root.addView(mainGrid, gridLp);
         root.addView(bottomBar, barLp);
         setContentView(root);
