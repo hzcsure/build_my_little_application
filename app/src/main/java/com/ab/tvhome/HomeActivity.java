@@ -42,7 +42,7 @@ public class HomeActivity extends Activity {
     private static final String KEY_ORDER = "app_order";
     private static final String KEY_AUTOBOOT = "autoboot_pkg";
     private static final long BOOT_WINDOW = 120_000;
-    private static final long BOOT_DELAY = 15_000;   // wait for network init
+    private static final long BOOT_DELAY = 30_000;   // wait for network init
     private static final long LONG_PRESS = 500;
     private static final int COLS = 5;
 
