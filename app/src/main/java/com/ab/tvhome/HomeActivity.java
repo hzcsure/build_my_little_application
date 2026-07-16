@@ -93,6 +93,7 @@ public class HomeActivity extends Activity {
             delayOptions[i] = i * 1000L;
             delayLabels[i] = i == 0 ? "关闭" : i + "秒";
         }
+        iconSize = dp(100); gridPad = dp(32); tilePad = dp(8);
 
         // Boot: delayed auto-launch (configurable)
         if (SystemClock.elapsedRealtime() < BOOT_WINDOW && !autobootPkg.isEmpty() && delayIdx > 0) {
