@@ -26,36 +26,17 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v3
 
-      - name: Build APK
-        run: gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build-log.txt
+      - name: Build APK (debug)
+        run: gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build-log.txt
 
       - name: Dump build log on failure
         if: failure()
         run: |
-          echo "========= BUILD FAILED - FULL LOG ========="
+          echo "===== BUILD FAILED ====="
           cat build-log.txt
-          echo "========= GRADLE STDERR ========="
-          find . -name "*.log" -exec cat {} \; 2>/dev/null
-          find app/build -name "*.log" -exec cat {} \; 2>/dev/null
-
-      - name: Sign APK
-        if: success()
-        run: |
-          echo "=== All APKs ===" && find app -name "*.apk" -ls 2>/dev/null
-          APK=$(find app/build/outputs/apk -name "*.apk" | head -1)
-          if [ -z "$APK" ]; then echo "NO APK FOUND!"; exit 1; fi
-          echo "Signing: $APK"
-          keytool -genkey -v -keystore debug.keystore -storepass android \
-            -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
-            -validity 10000 -dname "CN=AndroidDebug,O=Android,C=US" 2>&1
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-            -keystore debug.keystore -storepass android -keypass android \
-            "$APK" androiddebugkey 2>&1
-          mkdir -p app/build/outputs/apk/release
-          cp "$APK" app/build/outputs/apk/release/BootHelper.apk
 
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: BootHelper
-          path: app/build/outputs/apk/release/BootHelper.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
