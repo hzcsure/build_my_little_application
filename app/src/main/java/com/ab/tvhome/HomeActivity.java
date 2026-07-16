@@ -121,6 +121,20 @@ public class HomeActivity extends Activity {
         mainGrid.setColumnWidth(iconSize + tilePad * 2);
         mainGrid.setFocusable(true);
         mainGrid.setFocusableInTouchMode(true);
+
+        // Visible focus selector on GridView
+        GradientDrawable selNormal = new GradientDrawable();
+        selNormal.setColor(Color.TRANSPARENT);
+        GradientDrawable selFocus = new GradientDrawable();
+        selFocus.setShape(GradientDrawable.RECTANGLE);
+        selFocus.setCornerRadius(dp(8));
+        selFocus.setStroke(dp(3), 0xFF00BFFF);
+        selFocus.setColor(0x2200BFFF);
+        StateListDrawable listSel = new StateListDrawable();
+        listSel.addState(new int[]{android.R.attr.state_focused}, selFocus);
+        listSel.addState(new int[]{}, selNormal);
+        mainGrid.setSelector(listSel);
+        mainGrid.setDrawSelectorOnTop(true);
         mainGrid.requestFocus();
 
         mainAdapter = new AppAdapter();
@@ -326,29 +340,18 @@ public class HomeActivity extends Activity {
     }
 
     private View newTile() {
-        GradientDrawable normal = new GradientDrawable();
-        normal.setShape(GradientDrawable.RECTANGLE);
-        normal.setCornerRadius(dp(8));
-        normal.setColor(0x22FFFFFF);
-
-        GradientDrawable focused = new GradientDrawable();
-        focused.setShape(GradientDrawable.RECTANGLE);
-        focused.setCornerRadius(dp(8));
-        focused.setColor(0x33FFFFFF);
-        focused.setStroke(dp(2), 0xFF00BFFF);
-
-        StateListDrawable bg = new StateListDrawable();
-        bg.addState(new int[]{android.R.attr.state_focused}, focused);
-        bg.addState(new int[]{}, normal);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(8));
+        bg.setColor(0x22FFFFFF);
 
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(tilePad, tilePad, tilePad, tilePad);
         tile.setBackground(bg);
-        tile.setFocusable(true);
-        tile.setClickable(true);
-        tile.setFocusableInTouchMode(true);
+        tile.setFocusable(false);
+        tile.setClickable(false);
 
         ImageView icon = new ImageView(this);
         icon.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
