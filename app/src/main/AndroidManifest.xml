@@ -23,7 +23,7 @@
         <!-- HOME: enable this alias when you want to switch it to default launcher -->
         <activity-alias
             android:name=".HomeLauncher"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:targetActivity=".HomeActivity">
             <intent-filter>
