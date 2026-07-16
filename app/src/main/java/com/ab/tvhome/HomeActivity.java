@@ -139,10 +139,9 @@ public class HomeActivity extends Activity {
 
         mainAdapter = new AppAdapter();
         mainGrid.setAdapter(mainAdapter);
-        mainGrid.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            public void onItemClick(AdapterView<?> p, View v, int pos, long id) {
-                launchApp(pos);
-            }
+        mainGrid.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {}
+            public void onNothingSelected(AdapterView<?> p) {}
         });
 
         // bottom bar
@@ -214,22 +213,26 @@ public class HomeActivity extends Activity {
     }
 
     // ====== Key events ======
+    private long dpadDownTime = 0;
+    private static final long LONG_PRESS = 500;
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        // ENTER on grid item
-        if (event.getAction() == KeyEvent.ACTION_DOWN
-                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
-                    || event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-            if (mainGrid.isFocused() && mainGrid.getSelectedItemPosition() >= 0) {
-                launchApp(mainGrid.getSelectedItemPosition());
+        // Long-press DPAD_CENTER → show menu
+        if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                dpadDownTime = System.currentTimeMillis();
                 return true;
             }
-        }
-
-        // Menu key
-        if (event.getKeyCode() == KeyEvent.KEYCODE_MENU && event.getAction() == KeyEvent.ACTION_UP) {
-            toggleBottomBar();
-            return true;
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (System.currentTimeMillis() - dpadDownTime >= LONG_PRESS) {
+                    toggleBottomBar();
+                } else {
+                    launchApp(mainGrid.getSelectedItemPosition());
+                }
+                dpadDownTime = 0;
+                return true;
+            }
         }
 
         // Back from bottom bar
