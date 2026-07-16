@@ -5,19 +5,17 @@ import android.content.ContentValues;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Handler;
 
 public class BootProvider extends ContentProvider {
     private static final String TARGET_PKG = "com.V2.blb5";
-    private static final long DELAY_MS = 30000;
 
     @Override
     public boolean onCreate() {
-        // ContentProvider.onCreate() runs during boot, before any BroadcastReceiver
-        // Xiaomi does NOT block this unlike boot broadcasts
-        new Handler().postDelayed(new Runnable() {
+        // fire-and-forget in background thread so we don't block app init
+        new Thread() {
             @Override
             public void run() {
+                try { Thread.sleep(5000); } catch (Exception e) { }
                 try {
                     Intent launch = getContext().getPackageManager()
                             .getLaunchIntentForPackage(TARGET_PKG);
@@ -25,11 +23,9 @@ public class BootProvider extends ContentProvider {
                         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         getContext().startActivity(launch);
                     }
-                } catch (Exception e) {
-                    // ignore
-                }
+                } catch (Exception e) { }
             }
-        }, DELAY_MS);
+        }.start();
         return true;
     }
 
