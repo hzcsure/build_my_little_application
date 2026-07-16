@@ -29,34 +29,58 @@ jobs:
           BTDIR=$ANDROID_SDK_ROOT/build-tools/28.0.3
           ANDROID_JAR=$ANDROID_SDK_ROOT/platforms/android-28/android.jar
           mkdir -p build/gen build/obj build/apk/unpacked
+          LOG=build/build.log
           
           # 1. link manifest
+          echo "=== STEP 1: aapt2 link ===" | tee -a $LOG
           $BTDIR/aapt2 link -o build/apk/base.apk \
-            -I $ANDROID_JAR --manifest app/src/main/AndroidManifest.xml 2>&1
+            -I $ANDROID_JAR --manifest app/src/main/AndroidManifest.xml 2>&1 | tee -a $LOG
+          echo "EXIT=$?" | tee -a $LOG
           
           # 2. compile java
+          echo "=== STEP 2: javac ===" | tee -a $LOG
           find app/src/main/java -name "*.java" -exec javac -d build/obj \
-            -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \; 2>&1
+            -classpath $ANDROID_JAR -source 1.8 -target 1.8 {} \; 2>&1 | tee -a $LOG
+          echo "EXIT=$?" | tee -a $LOG
           
           # 3. dex
-          java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ \
-            $(find build/obj -name "*.class") 2>&1
+          echo "=== STEP 3: d8 ===" | tee -a $LOG
+          CLASSES=$(find build/obj -name "*.class")
+          if [ -n "$CLASSES" ]; then
+            java -jar $BTDIR/lib/d8.jar --output build/apk/unpacked/ $CLASSES 2>&1 | tee -a $LOG
+            echo "EXIT=$?" | tee -a $LOG
+          else
+            echo "NO .class FILES FOUND" | tee -a $LOG
+          fi
           
           # 4. package
-          cd build/apk
-          unzip -q base.apk -d unpacked
-          cp unpacked/classes.dex . 2>/dev/null || cp classes.dex unpacked/ 2>/dev/null || true
-          cd unpacked && zip -qr ../unsigned.apk . && cd ../..
+          echo "=== STEP 4: package ===" | tee -a $LOG
+          (cd build/apk && unzip -q base.apk -d unpacked && \
+           mv ../unpacked/classes.dex unpacked/ 2>/dev/null || true && \
+           cd unpacked && zip -qr ../unsigned.apk .) 2>&1 | tee -a $LOG
+          echo "EXIT=$?" | tee -a $LOG
           
           # 5. sign
-          keytool -genkey -v -keystore build/debug.keystore -storepass android \
-            -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=A,O=A,C=US" 2>&1
-          $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
-            --out build/BootHelper.apk build/apk/unsigned.apk 2>&1
+          echo "=== STEP 5: sign ===" | tee -a $LOG
+          if [ -f build/apk/unsigned.apk ]; then
+            keytool -genkey -v -keystore build/debug.keystore -storepass android \
+              -alias a -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=A,O=A,C=US" 2>&1 | tee -a $LOG
+            $BTDIR/apksigner sign --ks build/debug.keystore --ks-pass pass:android \
+              --out build/BootHelper.apk build/apk/unsigned.apk 2>&1 | tee -a $LOG
+            echo "EXIT=$?" | tee -a $LOG
+          else
+            echo "NO unsigned.apk" | tee -a $LOG
+          fi
           
-          echo "=== RESULT ==="
-          ls -la build/BootHelper.apk
+          echo "=== FINAL ===" | tee -a $LOG
+          ls -la build/BootHelper.apk 2>&1 | tee -a $LOG
+          # Print summary to stderr for GitHub annotations
+          tail -20 $LOG >&2
+
+      - name: Show build log on failure
+        if: failure()
+        run: cat build/build.log
 
       - uses: actions/upload-artifact@v4
         with:
