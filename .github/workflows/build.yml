@@ -41,7 +41,9 @@ jobs:
       - name: Sign APK
         if: success()
         run: |
-          APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "unsigned" | head -1)
+          echo "=== All APKs ===" && find app/build -name "*.apk" -ls
+          APK=$(find app/build -name "*.apk" -not -name "BootHelper.apk" | head -1)
+          echo "Signing: $APK"
           keytool -genkey -v -keystore debug.keystore -alias debug -keyalg RSA \
             -keysize 2048 -validity 10000 -storepass android -keypass android \
             -dname "CN=BootHelper, OU=Dev, O=BootHelper, L=NA, ST=NA, C=US"
