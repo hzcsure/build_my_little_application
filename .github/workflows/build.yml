@@ -45,4 +45,5 @@ jobs:
         if: success()
         with:
           name: BootHelper
-          path: "**/*.apk"
+          path: |
+            app/build/outputs/**
